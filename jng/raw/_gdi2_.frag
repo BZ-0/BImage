@@ -77,5 +77,5 @@ void main() {
     vec3 linearRGB = texture(img_rgb, texcoord.xy).xyz;
     float alpha = texture(img_a, texcoord.xy).x;
     vec3 XYZ = linearRGB * srgb_xyz;
-    fragColor = vec4(pow(XYZ * inverse(rgb_xyz_c), vec3(1.f / gamma)), alpha);
+    fragColor = vec4(pow(XYZ * inverse(rgb_xyz_c), vec3(0.45f / gamma)), alpha);
 }

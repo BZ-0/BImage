@@ -1,4 +1,10 @@
 //
+const _vertex_ = `#version 300 es
+precision lowp float;precision lowp int;out highp vec2 texcoord;void main(){const lowp vec2 l[4]=vec2[4](vec2(-1),vec2(1,-1),vec2(1),vec2(-1,1));texcoord=vec2(l[gl_VertexID].xy*.5f+.5f);texcoord.y=1.f-texcoord.y;gl_Position=vec4(l[gl_VertexID],0,1);}`;
+const _fragment_ = `#version 300 es
+precision highp float;precision highp int;precision highp sampler2D;precision highp usampler2D;in highp vec2 texcoord;uniform highp sampler2D img_rgb,img_a;layout(location=0) out highp vec4 fragColor;uniform vec2 rxy,gxy,bxy,wxy;uniform float gamma;void main(){mat3x3 h=transpose(mat3x3(vec3(rxy,1.f-rxy.x-rxy.y),vec3(gxy,1.f-gxy.x-gxy.y),vec3(bxy,1.f-bxy.x-bxy.y)));vec3 v=vec3(wxy,1.f-wxy.x-wxy.y)/wxy.y*inverse(h);for(uint f=0u;f<3u;f++)for(uint u=0u;u<3u;u++)h[u][f]*=v[f];fragColor=vec4(pow(texture(img_rgb,texcoord.xy).xyz*mat3x3(.4124564,.3575761,.1804375,.2126729,.7151522,.072175,.0193339,.119192,.9503041)*inverse(h),vec3(.45f/gamma)),texture(img_a,texcoord.xy).x);}`
+
+//
 const signed_crc_table = () => {
     let c = 0;
     const table = new Array(256);
@@ -136,12 +142,6 @@ const typeMap = (gl, internal) =>
     }[internal]);
 
 //
-const _vertex_ = `#version 300 es
-precision lowp float;precision lowp int;out highp vec2 texcoord;void main(){const lowp vec2 l[4]=vec2[4](vec2(-1),vec2(1,-1),vec2(1),vec2(-1,1));texcoord=vec2(l[gl_VertexID].xy*.5f+.5f);texcoord.y=1.f-texcoord.y;gl_Position=vec4(l[gl_VertexID],0,1);}`;
-const _fragment_ = `#version 300 es
-precision highp float;precision highp int;precision highp sampler2D;precision highp usampler2D;in highp vec2 texcoord;uniform highp sampler2D img_rgb,img_a;layout(location=0) out highp vec4 fragColor;uniform vec2 rxy,gxy,bxy,wxy;uniform float gamma;void main(){mat3x3 h=transpose(mat3x3(vec3(rxy,1.f-rxy.x-rxy.y),vec3(gxy,1.f-gxy.x-gxy.y),vec3(bxy,1.f-bxy.x-bxy.y)));vec3 v=vec3(wxy,1.f-wxy.x-wxy.y)/wxy.y*inverse(h);for(uint f=0u;f<3u;f++)for(uint u=0u;u<3u;u++)h[u][f]*=v[f];fragColor=vec4(pow(texture(img_rgb,texcoord.xy).xyz*mat3x3(.4124564,.3575761,.1804375,.2126729,.7151522,.072175,.0193339,.119192,.9503041)*inverse(h),vec3(1.f/gamma)),texture(img_a,texcoord.xy).x);}`;
-
-//
 const formatMap = (gl, internal) =>
     ({
         //
@@ -255,13 +255,11 @@ class GDI2 {
         }
 
         //
-        this.gl.unpackColorSpace = 'srgb';
-        let internal = this.gl.RGB8;
-        //let internal = this.gl.SRGB8;//this.gl.SRGB8;
-        if (index == 1) {
-            this.gl.unpackColorSpace = 'srgb';
-            internal = this.gl.R8;
-        }
+        //this.gl.unpackColorSpace = 'srgb-linear'; let internal = this.gl.RGB8;
+        this.gl.unpackColorSpace = 'srgb'; let internal = this.gl.SRGB8;
+
+        //
+        if (index == 1) { this.gl.unpackColorSpace = 'srgb'; internal = this.gl.R8; }
 
         // Now that the image has loaded make copy it to the texture.
         const texture = this.gl.createTexture();
