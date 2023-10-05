@@ -137,9 +137,9 @@ const typeMap = (gl, internal) =>
 
 //
 const _vertex_ = `#version 300 es
-precision lowp float;precision lowp int;out highp vec2 texcoord;void main(){const lowp vec2 l[4]=vec2[4](vec2(-1),vec2(1,-1),vec2(1),vec2(-1,1));texcoord=vec2(l[gl_VertexID].xy*.5f+.5f);texcoord.y=1.f-texcoord.y;gl_Position=vec4(l[gl_VertexID],0,1);}`
+precision lowp float;precision lowp int;out highp vec2 texcoord;void main(){const lowp vec2 l[4]=vec2[4](vec2(-1),vec2(1,-1),vec2(1),vec2(-1,1));texcoord=vec2(l[gl_VertexID].xy*.5f+.5f);texcoord.y=1.f-texcoord.y;gl_Position=vec4(l[gl_VertexID],0,1);}`;
 const _fragment_ = `#version 300 es
-precision highp float;precision highp int;precision highp sampler2D;precision highp usampler2D;in highp vec2 texcoord;uniform highp sampler2D img_rgb,img_a;layout(location=0) out highp vec4 fragColor;uniform vec2 rxy,gxy,bxy,wxy;uniform float gamma;void main(){mat3x3 h=transpose(mat3x3(vec3(rxy,1.f-rxy.x-rxy.y),vec3(gxy,1.f-gxy.x-gxy.y),vec3(bxy,1.f-bxy.x-bxy.y)));vec3 v=vec3(wxy,1.f-wxy.x-wxy.y)/wxy.y*inverse(h);for(uint f=0u;f<3u;f++)for(uint u=0u;u<3u;u++)h[u][f]*=v[f];fragColor=vec4(pow(texture(img_rgb,texcoord.xy).xyz*mat3x3(.4124564,.3575761,.1804375,.2126729,.7151522,.072175,.0193339,.119192,.9503041)*inverse(h),vec3(1.f/gamma)),texture(img_a,texcoord.xy).x);}`
+precision highp float;precision highp int;precision highp sampler2D;precision highp usampler2D;in highp vec2 texcoord;uniform highp sampler2D img_rgb,img_a;layout(location=0) out highp vec4 fragColor;uniform vec2 rxy,gxy,bxy,wxy;uniform float gamma;void main(){mat3x3 h=transpose(mat3x3(vec3(rxy,1.f-rxy.x-rxy.y),vec3(gxy,1.f-gxy.x-gxy.y),vec3(bxy,1.f-bxy.x-bxy.y)));vec3 v=vec3(wxy,1.f-wxy.x-wxy.y)/wxy.y*inverse(h);for(uint f=0u;f<3u;f++)for(uint u=0u;u<3u;u++)h[u][f]*=v[f];fragColor=vec4(pow(texture(img_rgb,texcoord.xy).xyz*mat3x3(.4124564,.3575761,.1804375,.2126729,.7151522,.072175,.0193339,.119192,.9503041)*inverse(h),vec3(1.f/gamma)),texture(img_a,texcoord.xy).x);}`;
 
 //
 const formatMap = (gl, internal) =>
@@ -483,8 +483,10 @@ class ChunkReader {
 
 //
 class ReconstructPNG {
+    #PNGsignature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+
+    //
     constructor(chunks, header) {
-        this.PNGsignature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
         this.idats = chunks.filter(chunk => {
             //chunk.name != "JHDR" &&
             //chunk.name != "JDAT" &&
@@ -564,8 +566,56 @@ class ReconstructPNG {
         this.encodeIEND();
         return new Blob(
             [
-                /*[this.concat(Uint8Array, JPEGc)]*/ this.PNGsignature,
+                /*[this.concat(Uint8Array, JPEGc)]*/ this.#PNGsignature,
                 ...this.chunks.map(chunk => {
+                    return chunk.slice;
+                })
+            ],
+            { type: 'image/png' }
+        );
+    }
+}
+
+//
+class InjectPNG {
+    #PNGsignature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+
+    //
+    constructor(chunks) {
+        this.chunks = chunks.filter(chunk => ['JHDR', 'JDAT', 'JDAA', 'JEND', 'IEND', 'IDAT', 'gAMA', 'cHRM'].indexOf(chunk.name) < 0);
+    }
+
+    //
+    inject() {
+        let IHDRi = this.reader.chunks.findIndex(chunk => chunk.name == 'IHDR');
+        this.reader.chunks.splice(IHDRi + 1, 0, ...this.chunks);
+        return this;
+    }
+
+    //
+    recode(binPNG, byteOffset = 0, limit = 0xffffffff) {
+        this.reader = new ChunkReader(binPNG, byteOffset);
+        this.reader.readSignature();
+        while (this.reader.offset < Math.min(this.reader.data.byteLength, byteOffset + limit)) {
+            this.reader.readLength();
+            this.reader.readName();
+            this.reader.readData();
+            this.reader.readCRC();
+            this.reader.makeSlice();
+            if (this.reader.chunks.slice(-1)[0].name == 'IEND') {
+                break;
+            }
+        }
+
+        //
+        this.reader.chunks = [...this.reader.chunks];
+        this.inject();
+
+        //
+        return new Blob(
+            [
+                this.#PNGsignature,
+                ...this.reader.chunks.map(chunk => {
                     return chunk.slice;
                 })
             ],
@@ -584,10 +634,11 @@ export default class OpenJNG {
     #options = {};
     #correction = {};
     #result = null;
-    #URL = "";
-    #DIR = "";
+    #URL = '';
+    #DIR = '';
     #reader = null;
     #module = null;
+    #inject = null;
 
     //
     constructor(options) {
@@ -612,12 +663,6 @@ export default class OpenJNG {
         };
         this.#correction = {};
         this.#result = null;
-
-        // no needed anymore...
-        /*this.ctx = (this.canvas = new OffscreenCanvas(2, 2)).getContextDeepSpace("2d", { 
-            desynchronized: true, 
-            willReadFrequently: true
-        });*/
     }
 
     async #load(url, handle) {
@@ -783,6 +828,9 @@ export default class OpenJNG {
         }
 
         //
+        this.#inject = new InjectPNG(this.#reader.chunks);
+
+        //
         return this;
     }
 
@@ -808,20 +856,25 @@ export default class OpenJNG {
     }
 
     //
-    async asPNG() { return (await this.#combine()).getCanvas().convertToBlob({ type: 'image/png' }); }
-    async asCanvas() { return (await this.#combine()).getCanvas(); }
+    async asPNG() {
+        return (await this.#combine())
+            .getCanvas()
+            .convertToBlob({ type: 'image/png' })
+            .then($b => {
+                return fetch(URL.createObjectURL($b)).then(async r => {
+                    return this.#inject.recode(await r.arrayBuffer());
+                });
+            });
+    }
+    async asCanvas() {
+        return (await this.#combine()).getCanvas();
+    }
     async load(url) {
         return await this.#load(url, async (AB, blob) => {
             this.#reader = new ChunkReader(AB);
             this.#readImage();
             return this.#reader ? this.asPNG() : blob;
         });
-    }
-
-    #loadInternal(reader) {
-        this.#reader = reader;
-        this.readBody();
-        return this.recodePNG();
     }
 
     #reconstructPNG() {
@@ -842,13 +895,9 @@ export default class OpenJNG {
 
     //
     #combine() {
-        const $p = (async () => (Promise.all([
-            createImageBitmap(this.#RGB, { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), 
-            createImageBitmap(this.#A || (await _white_), { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), 
-            new Promise(async R => R((this.#module ??= await _module)))
-        ])))();
-        return $p.then((A_RGB)=>{
-            return (A_RGB[2].gdi.image(A_RGB[0], 0).image(A_RGB[1], 1).setCorrection(this.#correction).onCanvas().gen());
+        const $p = (async () => Promise.all([createImageBitmap(this.#RGB, { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), createImageBitmap(this.#A || (await _white_), { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), new Promise(async R => R((this.#module ??= await _module)))]))();
+        return $p.then(A_RGB => {
+            return A_RGB[2].gdi.image(A_RGB[0], 0).image(A_RGB[1], 1).setCorrection(this.#correction).onCanvas().gen();
         });
     }
 }
