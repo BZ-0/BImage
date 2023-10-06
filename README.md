@@ -19,3 +19,11 @@ There is mini-codecs collections...
 - [x] No plugins required
 - [x] Uses browser-native PNG and JPEG
 - [x] Support HTML5 Canvas HDR
+
+### API?
+
+```js
+import OpenJNG from "../jng/jng.mjs";
+const $img = document.querySelector("#jng");
+$img.src = URL.createObjectURL(await (new OpenJNG().load($img.src).asPNG()));
+```

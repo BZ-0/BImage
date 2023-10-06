@@ -2,7 +2,7 @@
 const _vertex_ = `#version 300 es
 precision lowp float;precision lowp int;out highp vec2 texcoord;void main(){const lowp vec2 l[4]=vec2[4](vec2(-1),vec2(1,-1),vec2(1),vec2(-1,1));texcoord=vec2(l[gl_VertexID].xy*.5f+.5f);texcoord.y=1.f-texcoord.y;gl_Position=vec4(l[gl_VertexID],0,1);}`;
 const _fragment_ = `#version 300 es
-precision highp float;precision highp int;precision highp sampler2D;precision highp usampler2D;in highp vec2 texcoord;uniform highp sampler2D img_rgb,img_a;layout(location=0) out highp vec4 fragColor;uniform vec2 rxy,gxy,bxy,wxy;uniform float gamma;void main(){mat3x3 h=transpose(mat3x3(vec3(rxy,1.f-rxy.x-rxy.y),vec3(gxy,1.f-gxy.x-gxy.y),vec3(bxy,1.f-bxy.x-bxy.y)));vec3 v=vec3(wxy,1.f-wxy.x-wxy.y)/wxy.y*inverse(h);for(uint f=0u;f<3u;f++)for(uint u=0u;u<3u;u++)h[u][f]*=v[f];fragColor=vec4(pow(texture(img_rgb,texcoord.xy).xyz*mat3x3(.4124564,.3575761,.1804375,.2126729,.7151522,.072175,.0193339,.119192,.9503041)*inverse(h),vec3(.45f/gamma)),texture(img_a,texcoord.xy).x);}`
+precision highp float;precision highp int;precision highp sampler2D;precision highp usampler2D;in highp vec2 texcoord;uniform highp sampler2D img_rgb,img_a;layout(location=0) out highp vec4 fragColor;uniform vec2 rxy,gxy,bxy,wxy;uniform float gamma;void main(){mat3x3 h=transpose(mat3x3(vec3(rxy,1.f-rxy.x-rxy.y),vec3(gxy,1.f-gxy.x-gxy.y),vec3(bxy,1.f-bxy.x-bxy.y)));vec3 v=vec3(wxy,1.f-wxy.x-wxy.y)/wxy.y*inverse(h);for(uint f=0u;f<3u;f++)for(uint u=0u;u<3u;u++)h[u][f]*=v[f];fragColor=vec4(pow(texture(img_rgb,texcoord.xy).xyz*mat3x3(.4124564,.3575761,.1804375,.2126729,.7151522,.072175,.0193339,.119192,.9503041)*inverse(h),vec3(.45f/gamma)),texture(img_a,texcoord.xy).x);}`;
 
 //
 const signed_crc_table = () => {
@@ -255,11 +255,14 @@ class GDI2 {
         }
 
         //
-        //this.gl.unpackColorSpace = 'srgb-linear'; let internal = this.gl.RGB8;
-        this.gl.unpackColorSpace = 'srgb'; let internal = this.gl.SRGB8;
+        this.gl.unpackColorSpace = 'srgb-linear'; let internal = this.gl.RGB8;
+        //this.gl.unpackColorSpace = 'srgb'; let internal = this.gl.SRGB8;
 
         //
-        if (index == 1) { this.gl.unpackColorSpace = 'srgb'; internal = this.gl.R8; }
+        if (index == 1) {
+            this.gl.unpackColorSpace = 'srgb';
+            internal = this.gl.R8;
+        }
 
         // Now that the image has loaded make copy it to the texture.
         const texture = this.gl.createTexture();
@@ -556,15 +559,11 @@ class ReconstructPNG {
 
     encode() {
         this.encodeIHDR();
-        /*if (this.header.bitDepth <= 8) {
-            this.encodePLTE();
-            this.encodeTRNS();
-        }*/
         this.chunks.push(...this.idats);
         this.encodeIEND();
         return new Blob(
             [
-                /*[this.concat(Uint8Array, JPEGc)]*/ this.#PNGsignature,
+                this.#PNGsignature,
                 ...this.chunks.map(chunk => {
                     return chunk.slice;
                 })
@@ -624,43 +623,19 @@ class InjectPNG {
 
 //
 export default class OpenJNG {
-    #header = {};
     #JNGSignature = new Uint8Array([0x8b, 0x4a, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    #alphaHeader = {};
-    #A = null;
-    #RGB = null;
     #options = {};
-    #correction = {};
-    #result = null;
     #URL = '';
     #DIR = '';
-    #reader = null;
     #module = null;
-    #inject = null;
+    #loading = null;
 
     //
     constructor(options) {
         this.#JNGSignature = new Uint8Array([0x8b, 0x4a, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-        this.#header = {
-            width: 0,
-            height: 0,
-            bitDepth: 8
-        };
-        this.#alphaHeader = {
-            width: 0,
-            height: 0,
-            bitDepth: 8,
-            filter: 0,
-            compression: 0,
-            interlace: 0
-        };
-        this.#A = null;
-        this.#RGB = null;
         this.#options = {
             ...options
         };
-        this.#correction = {};
-        this.#result = null;
     }
 
     async #load(url, handle) {
@@ -738,7 +713,6 @@ export default class OpenJNG {
             //console.error(e);
             //}
         } else {
-            this.#reader = null;
             console.error('URL: ' + url + ', Error HTTP: ' + response.status);
         }
 
@@ -775,82 +749,85 @@ export default class OpenJNG {
         return this.#compare(ua, ub);
     }
 
-    #checkSignature() {
-        return this.#equal32(this.#reader.signature, this.#JNGSignature);
+    #checkSignature(reader) {
+        return this.#equal32(reader.signature, this.#JNGSignature);
     }
 
-    #readBody() {
+    #readBody(reader) {
         //
-        while (this.#reader.offset < this.#reader.data.byteLength) {
-            this.#reader.readLength();
-            this.#reader.readName();
-            this.#reader.readData();
-            this.#reader.readCRC();
-            this.#reader.makeSlice();
-            if (this.#reader.chunks.slice(-1)[0].name == 'IEND') {
+        while (reader.offset < reader.data.byteLength) {
+            reader.readLength();
+            reader.readName();
+            reader.readData();
+            reader.readCRC();
+            reader.makeSlice();
+            if (reader.chunks.slice(-1)[0].name == 'IEND') {
                 break;
             }
         }
 
         //
-        const cxy = this.#reader.chunks.find(chunk => chunk.name == 'cHRM');
-        const gam = this.#reader.chunks.find(chunk => chunk.name == 'gAMA');
+        const cxy = reader.chunks.find(chunk => chunk.name == 'cHRM');
+        const gam = reader.chunks.find(chunk => chunk.name == 'gAMA');
+
+        //
+        const $result = {};
+        $result.correction = {};
 
         // color correction
         if (cxy) {
-            this.#correction.wxy = new Float32Array([cxy.view.getUint32(0, false) / 100000.0, cxy.view.getUint32(4, false) / 100000.0]);
-            this.#correction.rxy = new Float32Array([cxy.view.getUint32(8, false) / 100000.0, cxy.view.getUint32(12, false) / 100000.0]);
-            this.#correction.gxy = new Float32Array([cxy.view.getUint32(16, false) / 100000.0, cxy.view.getUint32(20, false) / 100000.0]);
-            this.#correction.bxy = new Float32Array([cxy.view.getUint32(24, false) / 100000.0, cxy.view.getUint32(28, false) / 100000.0]);
+            $result.correction.wxy = new Float32Array([cxy.view.getUint32(0, false) / 100000.0, cxy.view.getUint32(4, false) / 100000.0]);
+            $result.correction.rxy = new Float32Array([cxy.view.getUint32(8, false) / 100000.0, cxy.view.getUint32(12, false) / 100000.0]);
+            $result.correction.gxy = new Float32Array([cxy.view.getUint32(16, false) / 100000.0, cxy.view.getUint32(20, false) / 100000.0]);
+            $result.correction.bxy = new Float32Array([cxy.view.getUint32(24, false) / 100000.0, cxy.view.getUint32(28, false) / 100000.0]);
         }
 
         // gamma correction
         if (gam) {
-            this.#correction.gamma = gam.view.getUint32(0, false) / 100000.0;
+            $result.correction.gamma = gam.view.getUint32(0, false) / 100000.0;
         }
 
         //
-        this.#readHeader();
+        $result.header = this.#readHeader(reader);
 
         {
-            this.#RGB = this.#concatJDAT();
+            $result.RGB = this.#concatJDAT(reader);
         }
 
         {
-            if ((this.#alphaHeader.compression == 8 && this.#alphaHeader.bitDepth > 0) || this.#reader.chunks.find(chunk => chunk.name == 'JDAA' || chunk.name == 'JdAA')) {
-                this.#A = this.#concatJDAA();
-            } else if ((this.#alphaHeader.compression == 0 && this.#alphaHeader.bitDepth > 0) || this.#reader.chunks.find(chunk => chunk.name == 'IDAT')) {
+            if (($result.header.compression == 8 && $result.header.bitDepth > 0) || reader.chunks.find(chunk => chunk.name == 'JDAA' || chunk.name == 'JdAA')) {
+                $result.A = this.#concatJDAA(reader);
+            } else if (($result.header.compression == 0 && $result.header.bitDepth > 0) || reader.chunks.find(chunk => chunk.name == 'IDAT')) {
                 //if (this.alphaHeader.bitDepth <= 8) { this.indexedAvailable = true; };
-                this.#A = this.#reconstructPNG();
+                $result.A = this.#reconstructPNG(reader, $result.header);
             }
         }
 
         //
-        this.#inject = new InjectPNG(this.#reader.chunks);
-
-        //
-        return this;
+        $result.inject = new InjectPNG(reader.chunks);
+        return $result;
     }
 
-    #readImage() {
-        this.#reader.readSignature();
-        if (this.#checkSignature()) {
-            this.#readBody();
-        } else {
-            //console.error("Signature Read Failed!");
-            this.#reader = null;
+    //
+    #readImage(reader) {
+        reader.readSignature();
+        if (this.#checkSignature(reader)) {
+            return this.#readBody(reader);
         }
-        return this;
+        return {};
     }
 
-    #readHeader() {
-        const header = this.#reader.chunks.find(chunk => chunk.name === 'JHDR');
-        this.#alphaHeader.width = this.#header.width = header.view.getUint32(0, false);
-        this.#alphaHeader.height = this.#header.height = header.view.getUint32(4, false);
-        this.#alphaHeader.bitDepth = header.view.getUint8(12, false);
-        this.#alphaHeader.compression = header.view.getUint8(13, false);
-        this.#alphaHeader.filter = header.view.getUint8(14, false);
-        this.#alphaHeader.interlace = header.view.getUint8(15, false);
+    //
+    #readHeader(reader) {
+        const header = reader.chunks.find(chunk => chunk.name === 'JHDR');
+        return {
+            width: header.view.getUint32(0, false),
+            height: header.view.getUint32(4, false),
+            bitDepth: header.view.getUint8(12, false),
+            compression: header.view.getUint8(13, false),
+            filter: header.view.getUint8(14, false),
+            interlace: header.view.getUint8(15, false)
+        };
     }
 
     //
@@ -860,42 +837,54 @@ export default class OpenJNG {
             .convertToBlob({ type: 'image/png' })
             .then($b => {
                 return fetch(URL.createObjectURL($b)).then(async r => {
-                    return this.#inject.recode(await r.arrayBuffer());
+                    return (await this.#loading).inject.recode(await r.arrayBuffer());
                 });
             });
     }
+
+    //
     async asCanvas() {
         return (await this.#combine()).getCanvas();
     }
-    async load(url) {
-        return await this.#load(url, async (AB, blob) => {
-            this.#reader = new ChunkReader(AB);
-            this.#readImage();
-            return this.#reader ? this.asPNG() : blob;
+
+    //
+    load(url) {
+        this.#loading = this.#load(url, async (AB, blob) => {
+            return this.#readImage(new ChunkReader(AB));
         });
+        return this;
     }
 
-    #reconstructPNG() {
-        return new ReconstructPNG(this.#reader.chunks, this.#alphaHeader).encode();
+    //
+    #reconstructPNG(reader, header) {
+        return new ReconstructPNG(reader.chunks, header).encode();
     }
 
-    #concatJDAT() {
-        const JDATs = this.#reader.chunks.filter(chunk => chunk.name == 'JDAT');
-        const JPEGc = JDATs.map(chunk => chunk.data);
-        return new Blob(/*[this.concat(Uint8Array, JPEGc)]*/ JPEGc, { type: 'image/jpeg' });
+    //
+    #concatJDAT(reader) {
+        const JDATs = reader.chunks.filter(chunk => chunk.name == 'JDAT');
+        return new Blob(
+            JDATs.map(chunk => chunk.data),
+            { type: 'image/jpeg' }
+        );
     }
 
-    #concatJDAA() {
-        const JDATs = this.#reader.chunks.filter(chunk => chunk.name == 'JDAA' || chunk.name == 'JdAA');
-        const JPEGc = JDATs.map(chunk => chunk.data);
-        return new Blob(/*[this.concat(Uint8Array, JPEGc)]*/ JPEGc, { type: 'image/jpeg' });
+    //
+    #concatJDAA(reader) {
+        const JDATs = reader.chunks.filter(chunk => chunk.name == 'JDAA' || chunk.name == 'JdAA');
+        return new Blob(
+            JDATs.map(chunk => chunk.data),
+            { type: 'image/jpeg' }
+        );
     }
 
     //
     #combine() {
-        const $p = (async () => Promise.all([createImageBitmap(this.#RGB, { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), createImageBitmap(this.#A || (await _white_), { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), new Promise(async R => R((this.#module ??= await _module)))]))();
-        return $p.then(A_RGB => {
-            return A_RGB[2].gdi.image(A_RGB[0], 0).image(A_RGB[1], 1).setCorrection(this.#correction).onCanvas().gen();
+        return this.#loading.then($r => {
+            const $p = (async () => Promise.all([createImageBitmap($r.RGB, { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), createImageBitmap($r.A || (await _white_), { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), new Promise(async R => R((this.#module ??= await _module)))]))();
+            return $p.then(A_RGB => {
+                return A_RGB[2].gdi.image(A_RGB[0], 0).image(A_RGB[1], 1).setCorrection($r.correction).onCanvas().gen();
+            });
         });
     }
 }
