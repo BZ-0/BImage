@@ -281,8 +281,7 @@ class GDI2 {
     }
 
     //
-    fbo(internal = null) {
-        //
+    onFramebuffer(internal = null) {
         internal ??= this.gl.RGBA8;
 
         //
@@ -298,14 +297,12 @@ class GDI2 {
         this.gl.texImage2D(this.gl.TEXTURE_2D, 0, internal, this.width, this.height, 0, formatMap(this.gl, internal), typeMap(this.gl, internal), null);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, (this.fb = this.gl.createFramebuffer()));
         this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.output, 0);
-
-        //
         return this;
     }
 
     //
     onCanvas() {
-        this.resize(this.width, this.height);
+        this.#resize(this.width, this.height);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
 
         //
@@ -316,19 +313,17 @@ class GDI2 {
     }
 
     //
-    async gen() {
+    gen() {
         //
         this.gl.viewport(0, 0, this.width, this.height);
         this.gl.clearBufferfv(this.gl.COLOR, 0, [0, 0, 0, 0]);
         this.gl.disable(this.gl.BLEND);
 
         //
-        const $program = await this.program;
+        const $program = this.program;
         this.gl.useProgram($program);
         this.gl.uniform1i(this.gl.getUniformLocation($program, `img_rgb`), 0);
         this.gl.uniform1i(this.gl.getUniformLocation($program, `img_a`), 1);
-
-        //
         this.gl.uniform1f(this.gl.getUniformLocation($program, `gamma`), this.correction.gamma);
         this.gl.uniform2fv(this.gl.getUniformLocation($program, `rxy`), this.correction.rxy);
         this.gl.uniform2fv(this.gl.getUniformLocation($program, `gxy`), this.correction.gxy);
@@ -341,13 +336,13 @@ class GDI2 {
     }
 
     //
-    resize(width, height) {
+    #resize(width, height) {
         this.canvas.width = width;
         this.canvas.height = height;
     }
 
     //
-    getCanvas() {
+    $getCanvas() {
         return this.canvas;
     }
 
@@ -833,7 +828,7 @@ export default class OpenJNG {
     //
     async asPNG() {
         return (await this.#combine())
-            .getCanvas()
+            .$getCanvas()
             .convertToBlob({ type: 'image/png' })
             .then($b => {
                 return fetch(URL.createObjectURL($b)).then(async r => {
@@ -843,8 +838,8 @@ export default class OpenJNG {
     }
 
     //
-    async asCanvas() {
-        return (await this.#combine()).getCanvas();
+    async asImageBitmap() {
+        return (await this.#combine()).$getCanvas().transferToImageBitmap();
     }
 
     //
