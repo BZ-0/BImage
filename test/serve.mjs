@@ -2,10 +2,7 @@
 
 // ESM
 import path from 'path'
-import fs from 'fs'
-import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
-import autoLoad from '@fastify/autoload'
 import cors from '@fastify/cors'
 import disableCache from "fastify-disablecache";
 
@@ -18,10 +15,6 @@ const __filename = fileURLToPath(import.meta.url + "/../")
 const __dirname = dirname(__filename)
 
 //
-/*const fastify = Fastify({
-    logger: true
-});*/
-
 export default async function (fastify, options) {
 
     //
@@ -60,29 +53,17 @@ export default async function (fastify, options) {
 
     // 
     fastify.register(fastifyStatic, {
-        prefix: '/', root: path.join(__dirname, 'test'),
+        prefix: '/', root: path.join(__dirname, './test'),
         list: true
     });
 
-    // 
-    fastify.register(fastifyStatic, {
-        prefix: '/jng/', root: path.join(__dirname, 'jng'),
-        decorateReply: false,
-        list: true
-    });
-
-    // 
-    fastify.register(fastifyStatic, {
-        prefix: '/test/', root: path.join(__dirname, 'test'),
-        decorateReply: false,
-        list: true
-    });
-
-    // 
-    fastify.register(fastifyStatic, {
-        prefix: '/src/', root: path.join(__dirname, 'src'),
-        decorateReply: false,
-        list: true
+    //
+    ["jng", "test", "coder"].map(($n)=>{
+        fastify.register(fastifyStatic, {
+            prefix: `/${$n}/`, root: path.join(__dirname, `./${$n}`),
+            decorateReply: false,
+            list: true
+        });
     });
 
     //
