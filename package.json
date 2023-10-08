@@ -19,9 +19,15 @@
   "keywords": [
     "image",
     "jng",
+    "jxl",
+    "jpeg",
     "codec",
+    "coder",
     "format",
-    "mini"
+    "mini",
+    "micro",
+    "tiny",
+    "atomic"
   ],
   "author": "user=404",
   "license": "MIT",
