@@ -2,7 +2,11 @@
 
 There is mini-codecs collections...
 
-### 📷 JNG 📷
+## Image Decoders
+
+### 📷 JNG (JPEG Network Graphics) 📷
+
+Based on pure JavaScript, uses native browser-decoders.
 
 #### About
 
@@ -23,7 +27,33 @@ There is mini-codecs collections...
 ### API?
 
 ```js
-import OpenJNG from "../jng/jng.mjs";
+import { JNG } from "/coder/index.mjs";
 const $img = document.querySelector("#jng");
-$img.src = URL.createObjectURL(await (new OpenJNG().load($img.src).asPNG()));
+$img.src = URL.createObjectURL(await (new JNG().load($img.src).asPNG()));
+```
+
+### 📷 JXL (JPEG XL) 📷
+
+Based on WebAssembly compilation.
+
+#### About
+
+- [En Wiki](https://en.wikipedia.org/wiki/JPEG_XL)
+- [Ru Wiki](https://ru.wikipedia.org/wiki/JPEG_XL)
+- [Webpage](https://jpeg.org/jpegxl/)
+- [Community](https://jpegxl.info/)
+
+#### Features
+
+- [x] Conversion to PNG 16-bit directly
+- [x] Using WebAssembly and Emscripten
+- [x] Import ICC profile to PNG format
+- [ ] Animation support
+
+### API?
+
+```js
+import {loadJXL} from "/coder/index.mjs";
+const $img = document.querySelector("#jxl");
+$img.src = URL.createObjectURL(new Blob([await loadJXL($img.src)], {type: 'image/png'}));
 ```
