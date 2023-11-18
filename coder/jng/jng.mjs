@@ -186,7 +186,7 @@ const formatMap = (gl, internal) =>
 //
 const drawColorSpace = 'srgb-linear';
 const sRGB = {
-    gamma: 1.0 / 2.2,
+    gamma: 1.0,
     rxy: new Float32Array([0.64, 0.33]),
     gxy: new Float32Array([0.3, 0.6]),
     bxy: new Float32Array([0.15, 0.06]),
