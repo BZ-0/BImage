@@ -58,26 +58,23 @@ const mat3x3 xyz_srgb = mat3x3(
 //
 void main() {
     //
-    mat3x3 rgb_xyz_c = transpose(mat3x3(
+    mat3x4 rgb_xyz_c = transpose(mat4x3(
         vec3(rxy, 1.f-rxy.x-rxy.y),
         vec3(gxy, 1.f-gxy.x-gxy.y),
-        vec3(bxy, 1.f-bxy.x-bxy.y)
+        vec3(bxy, 1.f-bxy.x-bxy.y),
+        vec3(0.f)
     ));
 
     //
-    vec3 w = vec3(wxy, 1.f-wxy.x-wxy.y) / wxy.y;
-    vec3 scale = w * inverse(rgb_xyz_c);
+    vec4 scale = vec4(wxy, 1.f-wxy.x-wxy.y, wxy.y) * inverse(mat4x4(rgb_xyz_c[0], rgb_xyz_c[1], rgb_xyz_c[2], vec4(0.0, 0.0, 0.0, 1.0)));
     for (uint x = 0u; x < 3u; x++) {
         for (uint y = 0u; y < 3u; y++) {
-            rgb_xyz_c[y][x] *= scale[x];
+            rgb_xyz_c[y][x] *= scale[x]/scale.w;
         }
     }
 
     //
-    vec3 linearRGB = texture(img_rgb, texcoord.xy).xyz;
-    float alpha = texture(img_a, texcoord.xy).x;
-
-    //
-    mat3x3 transfer = srgb_xyz * inverse(rgb_xyz_c);
-    fragColor = vec4(pow(linearRGB * transfer, vec3(0.45f / gamma)), alpha);
+    vec4 linearXYZ = vec4(texture(img_rgb, texcoord.xy).xyz*srgb_xyz, 1.0);
+    vec4 linearRGB = (linearXYZ/linearXYZ.w)*inverse(mat4x4(rgb_xyz_c[0], rgb_xyz_c[1], rgb_xyz_c[2], vec4(0.f, 0.f, 0.f, 1.0)));
+    fragColor = vec4(pow(linearRGB.xyz/linearRGB.w, vec3(0.45f / gamma)), texture(img_a, texcoord.xy).x);
 }
