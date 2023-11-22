@@ -67,14 +67,7 @@ void main() {
 
     //
     vec4 scale = vec4(wxy, 1.f-wxy.x-wxy.y, wxy.y) * inverse(mat4x4(rgb_xyz_c[0], rgb_xyz_c[1], rgb_xyz_c[2], vec4(0.0, 0.0, 0.0, 1.0)));
-    for (uint x = 0u; x < 3u; x++) {
-        for (uint y = 0u; y < 3u; y++) {
-            rgb_xyz_c[y][x] *= scale[x]/scale.w;
-        }
-    }
-
-    //
     vec4 linearXYZ = vec4(texture(img_rgb, texcoord.xy).xyz*srgb_xyz, 1.0);
-    vec4 linearRGB = (linearXYZ/linearXYZ.w)*inverse(mat4x4(rgb_xyz_c[0], rgb_xyz_c[1], rgb_xyz_c[2], vec4(0.f, 0.f, 0.f, 1.0)));
+    vec4 linearRGB = (linearXYZ/linearXYZ.w)*inverse(mat4x4(rgb_xyz_c[0], rgb_xyz_c[1], rgb_xyz_c[2], vec4(0.f, 0.f, 0.f, 1.0))) / scale;
     fragColor = vec4(pow(linearRGB.xyz/linearRGB.w, vec3(0.45f / gamma)), texture(img_a, texcoord.xy).x);
 }
