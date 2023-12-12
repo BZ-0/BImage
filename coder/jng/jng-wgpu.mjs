@@ -85,7 +85,19 @@ const sRGB = {
 export class CanvasOutput {
     constructor(device, width, height) {
         const canvas = new OffscreenCanvas(width, height);
-        const context = canvas.getContext("webgpu");
+        const context = canvas.getContext("webgpu", {
+            preserveDrawingBuffer: true,
+            precision: "highp",
+            powerPreference: "high-performance",
+            desynchronized: true,
+            willReadFrequently: true,
+            colorSpace: drawColorSpace,
+ 
+            // try to use fp16 draw buffer
+            pixelFormat: "float16",
+            dataType: "float16",
+            colorType: "float16"
+        });
 
         //
         const devicePixelRatio = window.devicePixelRatio;
@@ -99,7 +111,8 @@ export class CanvasOutput {
         context.configure({
             device,
             format: presentationFormat,
-            alphaMode: "premultiplied"
+            alphaMode: "premultiplied",
+            colorSpace: drawColorSpace
         });
 
         //
@@ -162,8 +175,7 @@ export class UniformGroup {
     writeData(arrayBuffer, bOffset = 0) {
         if (arrayBuffer instanceof ArrayBuffer || arrayBuffer instanceof SharedArrayBuffer) {
             return this.device.queue.writeBuffer(this.uniformBuffer, bOffset, arrayBuffer, 0, arrayBuffer.byteLength);
-        } else 
-        if (arrayBuffer?.buffer != null) {
+        } else {
             return this.device.queue.writeBuffer(this.uniformBuffer, bOffset, arrayBuffer.buffer, arrayBuffer.byteOffset, arrayBuffer.byteLength);
         }
     }
@@ -176,21 +188,26 @@ export class UniformGroup {
 
 //
 export class ImageInput {
-    constructor(device, imageBitmap, format = "rgba8unorm") {
+    constructor(device, imageBitmap, format = "rgba8unorm-srgb") {
         this.device = device;
         this.texture = device.createTexture({
             size: [imageBitmap.width, imageBitmap.height, 1],
             format,
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
         });
+        this.image = imageBitmap;
+    }
+
+    //
+    async update() {
+        this.device.queue.copyExternalImageToTexture({ source: this.image, flipY: true }, { texture: this.texture, colorSpace: "srgb", premultipliedAlpha: false }, [this.image.width, this.image.height]);
+        return this;
     }
 
     //
     getView() {
         return this.texture.createView({ dimension: "2d" });
     }
-
-    
 }
 
 //
@@ -829,18 +846,20 @@ export default class OpenJNG {
             const $p = (async () => Promise.all([createImageBitmap($r.RGB, { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), createImageBitmap($r.A || (await _white_), { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), new Promise(async R => R((this.#module ??= await _module)))]))();
             return $p.then(async (A_RGB) => {
                 const gdi3 = await A_RGB[2].gdi;
-                const rgb = new ImageInput(gdi3.device, A_RGB[0], "rgba8unorm");
-                const a = new ImageInput(gdi3.device, A_RGB[1], "r8unorm");
+                const rgb = await new ImageInput(gdi3.device, A_RGB[0], "rgba8unorm-srgb").update();
+                const a = await new ImageInput(gdi3.device, A_RGB[1], "r8unorm").update();
                 const fbo = new CanvasOutput(gdi3.device, A_RGB[0].width, A_RGB[0].height);
                 const pipeline = await gdi3.pipeline(gdi3.device, _vertex_, _fragment_, fbo.format);
                 const vbo = await gdi3.quad();
                 const sampler = new ImageSampler(gdi3.device, pipeline);
                 const uniform = new UniformGroup(gdi3.device, pipeline, 64);
-                uniform.writeData($r.correction.rxy, 0 * 8);
-                uniform.writeData($r.correction.gxy, 1 * 8);
-                uniform.writeData($r.correction.bxy, 2 * 8);
-                uniform.writeData($r.correction.wxy, 3 * 8);
-                uniform.writeData(new Float32Array([$r.gamma]), 4 * 8);
+
+                const $c = Object.assign({ ...sRGB }, $r.correction);
+                uniform.writeData($c.rxy, 0 * 8);
+                uniform.writeData($c.gxy, 1 * 8);
+                uniform.writeData($c.bxy, 2 * 8);
+                uniform.writeData($c.wxy, 3 * 8);
+                uniform.writeData(new Float32Array([$c.gamma]), 4 * 8);
 
                 //
                 const _ = await gdi3.render({ pipeline, vbo, bindings: [uniform, sampler, new ImageGroup(gdi3.device, pipeline, [rgb, a])], output: fbo });

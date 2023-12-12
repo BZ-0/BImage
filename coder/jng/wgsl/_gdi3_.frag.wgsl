@@ -11,7 +11,7 @@ struct RGBW {
 @group(2) @binding(0) var rgb: texture_2d<f32>;
 @group(2) @binding(1) var alpha: texture_2d<f32>;
 
-struct G { i: i32, j: i32, m: mat4x4<f32> }
+struct G { j: i32, i: i32, m: mat4x4<f32> }
 
 fn getv(m: vec4<f32>, i: i32) -> f32 {
     if (i == 0) { return m[0]; }
@@ -88,7 +88,7 @@ fn inverse(m: mat4x4<f32>) -> mat4x4<f32> {
     var inv: mat4x4<f32>;
     for (var i: i32=0;i<4;i++) {
         for (var j: i32=0;j<4;j++) {
-            var mx: G = G(i,j,m);
+            var mx: G = G(j,i,m);
             setm(&inv, j, i, invf(mx));
         }
     }
@@ -139,8 +139,9 @@ fn main(
     ));
 
     //
+    var a: f32 = textureSample(alpha, sampl, fUV).x;
     var scale: vec4<f32> = vec4<f32>(U.wxy, 1.f-U.wxy.x-U.wxy.y, U.wxy.y) * inverse(mat4x4<f32>(rgb_xyz_c[0], rgb_xyz_c[1], rgb_xyz_c[2], vec4<f32>(0.0, 0.0, 0.0, 1.0)));
     var linearXYZ: vec4<f32> = vec4<f32>(textureSample(rgb, sampl, fUV).xyz*srgb_xyz, 1.0);
     var linearRGB: vec4<f32> = (linearXYZ/linearXYZ.w)*inverse(mat4x4<f32>(rgb_xyz_c[0], rgb_xyz_c[1], rgb_xyz_c[2], vec4(0.f, 0.f, 0.f, 1.0))) / scale;
-    return vec4<f32>(pow(linearRGB.xyz/linearRGB.w, vec3(0.45f / U.gamma)), textureSample(alpha, sampl, fUV).x);
+    return vec4<f32>(pow(linearRGB.xyz/linearRGB.w, vec3(0.45f / U.gamma))*a, a);
 }
