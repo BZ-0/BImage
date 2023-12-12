@@ -1,3 +1,8 @@
+import * as vec4 from "../esm/vec4.js";
+import * as mat4 from "../esm/mat4.js";
+import * as vec3 from "../esm/vec3.js";
+import * as mat3 from "../esm/mat3.js";
+
 //
 const _vertex_ = await (await fetch(new URL("./wgsl/_gdi3_.vert.wgsl", import.meta.url).href)).text();
 const _fragment_ = await (await fetch(new URL("./wgsl/_gdi3_.frag.wgsl", import.meta.url).href)).text();
@@ -81,6 +86,49 @@ const sRGB = {
     wxy: new Float32Array([0.3127, 0.329])
 };
 
+
+
+
+
+class ArrayBufferWrap {
+    constructor(buffer, byteOffset = 0, byteLength = 0) {
+        this.buffer = buffer;
+        this.$byteLength = byteLength;
+        this.$byteOffset = byteOffset;
+    }
+
+    get byteLength() {
+        return this.$byteLength || this.buffer.byteLength || 0;
+    }
+
+    get byteOffset() {
+        return this.$byteOffset || this.buffer.byteOffset || 0;
+    }
+}
+
+//
+export const calcXYZ = (U, B) => {
+    //
+    let rgb_xyz_c = mat3.transpose(mat3.fromValues(), mat3.fromValues(
+        ...vec3.fromValues(...U.rxy, 1.0-U.rxy[0]-U.rxy[1]),
+        ...vec3.fromValues(...U.gxy, 1.0-U.gxy[0]-U.gxy[1]),
+        ...vec3.fromValues(...U.bxy, 1.0-U.bxy[0]-U.bxy[1])
+    ));
+
+    //
+    let xyz_rgb_c = mat3.invert(new Float32Array(B.buffer, B.byteOffset, 10), rgb_xyz_c);
+    let s_out = new Float32Array(B.buffer, B.byteOffset + 40, 4);
+
+    //
+    vec3.transformMat3(s_out, vec3.fromValues(...U.wxy.map((i) => i / U.wxy[1]), (1.0 - U.wxy[0] - U.wxy[1]) / U.wxy[1]), mat3.transpose(mat3.create(), xyz_rgb_c));
+
+    //
+    xyz_rgb_c[9] = U.gamma;
+
+    //
+    return B;
+}
+
 //
 export class CanvasOutput {
     constructor(device, width, height) {
@@ -155,7 +203,7 @@ export class UniformGroup {
     constructor(device, pipeline, byteLength) {
         const uniformBuffer = device.createBuffer({
             size: byteLength,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
 
         //
@@ -854,12 +902,8 @@ export default class OpenJNG {
                 const sampler = new ImageSampler(gdi3.device, pipeline);
                 const uniform = new UniformGroup(gdi3.device, pipeline, 64);
 
-                const $c = Object.assign({ ...sRGB }, $r.correction);
-                uniform.writeData($c.rxy, 0 * 8);
-                uniform.writeData($c.gxy, 1 * 8);
-                uniform.writeData($c.bxy, 2 * 8);
-                uniform.writeData($c.wxy, 3 * 8);
-                uniform.writeData(new Float32Array([$c.gamma]), 4 * 8);
+                //
+                uniform.writeData(calcXYZ(Object.assign({ ...sRGB }, $r.correction), new ArrayBufferWrap(new ArrayBuffer(64))), 0);
 
                 //
                 const _ = await gdi3.render({ pipeline, vbo, bindings: [uniform, sampler, new ImageGroup(gdi3.device, pipeline, [rgb, a])], output: fbo });

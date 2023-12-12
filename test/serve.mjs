@@ -58,7 +58,7 @@ export default async function (fastify, options) {
     });
 
     //
-    ["jng", "test", "coder", "loader"].map(($n)=>{
+    ["jng", "test", "coder", "loader", "esm"].map(($n)=>{
         fastify.register(fastifyStatic, {
             prefix: `/${$n}/`, root: path.join(__dirname, `./${$n}`),
             decorateReply: false,
