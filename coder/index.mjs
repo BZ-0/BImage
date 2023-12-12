@@ -1,4 +1,4 @@
-import JNG from "./jng/jng.min.mjs";
+import JNG from "./jng/jng-wgpu.mjs";
 import {loadJXL} from "./jxl/index.mjs";
 
 //

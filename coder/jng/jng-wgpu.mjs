@@ -1,6 +1,6 @@
 //
-const _vertex_ = await (await fetch(new URL("./raw/_gdi3_.vert.wgsl", import.meta.url).href)).text();
-const _fragment_ = await (await fetch(new URL("./raw/_gdi3_.frag.wgsl", import.meta.url).href)).text();
+const _vertex_ = await (await fetch(new URL("./wgsl/_gdi3_.vert.wgsl", import.meta.url).href)).text();
+const _fragment_ = await (await fetch(new URL("./wgsl/_gdi3_.frag.wgsl", import.meta.url).href)).text();
 
 //
 const signed_crc_table = () => {
@@ -106,6 +106,7 @@ export class CanvasOutput {
         this.canvas = canvas;
         this.context = context
         this.device = device;
+        this.format = presentationFormat;
     }
 
     //
@@ -161,7 +162,8 @@ export class UniformGroup {
     writeData(arrayBuffer, bOffset = 0) {
         if (arrayBuffer instanceof ArrayBuffer || arrayBuffer instanceof SharedArrayBuffer) {
             return this.device.queue.writeBuffer(this.uniformBuffer, bOffset, arrayBuffer, 0, arrayBuffer.byteLength);
-        } else {
+        } else 
+        if (arrayBuffer?.buffer != null) {
             return this.device.queue.writeBuffer(this.uniformBuffer, bOffset, arrayBuffer.buffer, arrayBuffer.byteOffset, arrayBuffer.byteLength);
         }
     }
@@ -211,13 +213,13 @@ export class ImageGroup {
 
 //
 export class ImageSampler {
-    constructor(device) {
+    constructor(device, pipeline) {
         this.binding = device.createBindGroup({
             layout: pipeline.getBindGroupLayout(1),
             entries: [
                 {
                     binding: 0,
-                    sampler: device.createSampler({
+                    resource: device.createSampler({
                         magFilter: "nearest",
                         minFilter: "nearest"
                     })
@@ -243,7 +245,6 @@ export class GDI3WGPU {
         //
         this.adapter = adapter;
         this.device = device;
-        this.sampler = new ImageSampler(this.device);
 
         //
         return this;
@@ -260,8 +261,8 @@ export class GDI3WGPU {
         ]);
 
         //
-        const vbo = device.createBuffer({
-            size: cubeVertexArray.byteLength,
+        const vbo = this.device.createBuffer({
+            size: quad.byteLength,
             usage: GPUBufferUsage.VERTEX,
             mappedAtCreation: true
         });
@@ -278,7 +279,7 @@ export class GDI3WGPU {
                 entryPoint: "main",
                 buffers: [
                     {
-                        arrayStride: 20,
+                        arrayStride: 24,
                         attributes: [
                             { shaderLocation: 0, offset: 0, format: "float32x4" },
                             { shaderLocation: 1, offset: 16, format: "float32x2" }
@@ -294,8 +295,7 @@ export class GDI3WGPU {
             primitive: {
                 topology: "triangle-list",
                 cullMode: "none"
-            },
-            depthStencil: { depthWriteEnabled: false, depthCompare: "never", format: "depth24plus" }
+            }
         });
 
         //
@@ -832,10 +832,9 @@ export default class OpenJNG {
                 const rgb = new ImageInput(gdi3.device, A_RGB[0], "rgba8unorm");
                 const a = new ImageInput(gdi3.device, A_RGB[1], "r8unorm");
                 const fbo = new CanvasOutput(gdi3.device, A_RGB[0].width, A_RGB[0].height);
-                const pipeline = await gdi3.pipeline(gdi3.device, _vertex_, _fragment_, "rgba8unorm");
+                const pipeline = await gdi3.pipeline(gdi3.device, _vertex_, _fragment_, fbo.format);
                 const vbo = await gdi3.quad();
-
-                //
+                const sampler = new ImageSampler(gdi3.device, pipeline);
                 const uniform = new UniformGroup(gdi3.device, pipeline, 64);
                 uniform.writeData($r.correction.rxy, 0 * 8);
                 uniform.writeData($r.correction.gxy, 1 * 8);
@@ -844,7 +843,7 @@ export default class OpenJNG {
                 uniform.writeData(new Float32Array([$r.gamma]), 4 * 8);
 
                 //
-                const _ = await gdi3.render({ vbo, binding: [uniform, gdi3.sampler, new ImageGroup(gdi3.device, pipeline, [rgb, a])], output: fbo });
+                const _ = await gdi3.render({ pipeline, vbo, bindings: [uniform, sampler, new ImageGroup(gdi3.device, pipeline, [rgb, a])], output: fbo });
                 return fbo;
             });
         });
