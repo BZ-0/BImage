@@ -79,7 +79,7 @@ const crc32_buf = (B, seed) => {
 //
 const drawColorSpace = 'srgb-linear';
 const sRGB = {
-    gamma: 1.0,
+    gamma: 0.5,
     rxy: new Float32Array([0.64, 0.33]),
     gxy: new Float32Array([0.3, 0.6]),
     bxy: new Float32Array([0.15, 0.06]),
@@ -380,7 +380,7 @@ export class GDI3WGPU {
                 {
                     view: output.getView(),
                     clearValue: { r: 0, g: 0, b: 0, a: 0 },
-                    loadOp: "clear",
+                    loadOp: "load",
                     storeOp: "store"
                 }
             ]
@@ -899,7 +899,7 @@ export default class OpenJNG {
             const $p = (async () => Promise.all([createImageBitmap($r.RGB, { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), createImageBitmap($r.A || (await _white_), { colorSpaceConversion: 'none', resizeQuality: 'pixelated' }), new Promise(async R => R((this.#module ??= await _module)))]))();
             return $p.then(async (A_RGB) => {
                 const gdi3 = await A_RGB[2].gdi;
-                const rgb = await new ImageInput(gdi3.device, A_RGB[0], "rgba8unorm-srgb").update();
+                const rgb = await new ImageInput(gdi3.device, A_RGB[0], "rgba8unorm").update();
                 const a = await new ImageInput(gdi3.device, A_RGB[1], "r8unorm").update();
                 const fbo = new CanvasOutput(gdi3.device, A_RGB[0].width, A_RGB[0].height);
                 const pipeline = await gdi3.pipeline(gdi3.device, _vertex_, _fragment_, fbo.format);

@@ -20,6 +20,14 @@ const xyz_srgb = mat3x3(
 );
 
 //
+fn fromLinear(linearRGB: vec3<f32>) -> vec3<f32> {
+    var cutoff: vec3<bool> = vec3(linearRGB.x < 0.0031308, linearRGB.y < 0.0031308, linearRGB.z < 0.0031308);
+    var higher: vec3<f32> = vec3(1.055)*pow(linearRGB, vec3(1.0/2.4)) - vec3(0.055);
+    var lower: vec3<f32> = linearRGB * vec3(12.92);
+    return select(higher, lower, cutoff);
+}
+
+//
 @fragment
 fn main(
   @location(0) fUV: vec2<f32>,
@@ -33,5 +41,5 @@ fn main(
     let a: f32 = textureSample(alpha, sampl, fUV).x;
     let linearXYZ: vec4<f32> = vec4<f32>(textureSample(rgb, sampl, fUV).xyz*srgb_xyz, 1.0);
     let linearRGB: vec3<f32> = (linearXYZ.xyz/linearXYZ.w) * xyz_rgb_c / scale.xyz;
-    return vec4<f32>(pow(linearRGB.xyz, vec3(0.45f / gamma))*a, a);
+    return vec4<f32>(fromLinear(pow(linearRGB.xyz, vec3(1.0f / gamma)))*a, a);
 }
