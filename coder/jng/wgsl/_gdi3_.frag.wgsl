@@ -41,5 +41,5 @@ fn main(
     let a: f32 = textureSample(alpha, sampl, fUV).x;
     let linearXYZ: vec4<f32> = vec4<f32>(textureSample(rgb, sampl, fUV).xyz*srgb_xyz, 1.0);
     let linearRGB: vec3<f32> = (linearXYZ.xyz/linearXYZ.w) * xyz_rgb_c / scale.xyz;
-    return vec4<f32>(fromLinear(pow(linearRGB.xyz, vec3(1.0f / gamma)))*a, a);
+    return vec4<f32>(fromLinear(pow(linearRGB.xyz, vec3(0.45f / gamma)))*a, a);
 }
