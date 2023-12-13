@@ -130,21 +130,26 @@ export const calcXYZ = (U, B) => {
 }
 
 //
+const debugCanvas = (width, height) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    document.body.appendChild(canvas);
+    canvas.convertToBlob = ({type, quality})=>{
+        return new Promise((r) => {
+            canvas.toBlob(r, type, quality);
+        });
+    }
+    return canvas;
+};
+
+//
 export class CanvasOutput {
     constructor(device, width, height) {
-        const canvas = new OffscreenCanvas(width, height);
+        const canvas = debugCanvas(width, height); //new OffscreenCanvas(width, height);
         const context = canvas.getContext("webgpu", {
             preserveDrawingBuffer: true,
-            precision: "highp",
-            powerPreference: "high-performance",
-            desynchronized: true,
-            willReadFrequently: true,
-            colorSpace: drawColorSpace,
- 
-            // try to use fp16 draw buffer
-            pixelFormat: "float16",
-            dataType: "float16",
-            colorType: "float16"
+            colorSpace: "srgb"
         });
 
         //
@@ -160,7 +165,7 @@ export class CanvasOutput {
             device,
             format: presentationFormat,
             alphaMode: "premultiplied",
-            colorSpace: drawColorSpace
+            colorSpace: "srgb"
         });
 
         //
